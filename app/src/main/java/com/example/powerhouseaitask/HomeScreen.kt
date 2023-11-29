@@ -5,10 +5,12 @@ import android.content.pm.PackageManager
 import android.location.Geocoder
 import android.os.Bundle
 import android.util.Log
+import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.lifecycle.ViewModelProvider
+import androidx.recyclerview.widget.LinearLayoutManager
 import com.android.volley.Request
 import com.android.volley.Response
 import com.android.volley.toolbox.JsonObjectRequest
@@ -31,7 +33,7 @@ class HomeScreen : AppCompatActivity() {
 
     var lat = ""
     var lng = ""
-    private val apiKey = "80687fddffdbce720eb444a34f56df32"
+    private val apiKey = "YOUR_API_KEY"
     private val weatherApiBaseUrl = "https://api.openweathermap.org/data/2.5/weather"
 
     // save data offline
@@ -39,6 +41,11 @@ class HomeScreen : AppCompatActivity() {
     private val KEY_LOCATION = "location"
     private val KEY_TEMPERATURE = "temperature"
     private val KEY_WEATHER_DESCRIPTION = "weather_description"
+
+    // inti adapter
+    lateinit var adapter: WeatherCityAdapter
+
+    var counter = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -63,6 +70,31 @@ class HomeScreen : AppCompatActivity() {
             binding.txtSkyCondition.text = cachedWeatherDescription
         }
 
+
+        // logic for recycler view layout
+        binding.fLayoutSeeMore.setOnClickListener {
+            counter++
+            if (counter % 2 == 0) {
+                binding.cityRecyclerView.visibility = View.VISIBLE
+            } else {
+                binding.cityRecyclerView.visibility = View.GONE
+            }
+        }
+
+        // inflating recyclerview
+        binding.cityRecyclerView.layoutManager = LinearLayoutManager(this)
+        binding.cityRecyclerView.setHasFixedSize(true)
+
+        val cityNames = listOf("New York", "Singapore", "Mumbai", "Delhi", "Sydney", "Melbourne")
+
+        // Initialize the adapter with an empty list
+        adapter = WeatherCityAdapter(emptyList())
+        binding.cityRecyclerView.adapter = adapter
+
+        // Fetch weather data for each city
+        for (city in cityNames) {
+            fetchWeatherData(city)
+        }
 
     }
 
@@ -216,5 +248,41 @@ class HomeScreen : AppCompatActivity() {
             binding.txtCurrentTemperature.text = "${temperature.toInt() - 273} °C"
             binding.txtSkyCondition.text = "$weatherDescription"
         }
+    }
+
+
+    // for particulat cities
+    private fun fetchWeatherData(cityName: String) {
+        val url = "https://api.openweathermap.org/data/2.5/weather?q=$cityName&APPID=$apiKey"
+
+        val request = JsonObjectRequest(Request.Method.GET, url, null,
+            { response ->
+                val weatherInfo = parseWeatherResponse(response)
+                updateWeatherList(weatherInfo)
+            },
+            { error ->
+                Log.e("WeatherApp", "Error fetching weather data for $cityName: $error")
+            })
+
+        // Add the request to the RequestQueue
+        Volley.newRequestQueue(this).add(request)
+    }
+
+    private fun parseWeatherResponse(response: JSONObject): WeatherCityModel {
+        val cityName = response.getString("name")
+        val main = response.getJSONObject("main")
+        val temperature = main.getDouble("temp")
+        val weatherArray = response.getJSONArray("weather")
+        val weatherObject = weatherArray.getJSONObject(0)
+        val weatherDescription = weatherObject.getString("description")
+
+        return WeatherCityModel(cityName, temperature, weatherDescription)
+    }
+
+    private fun updateWeatherList(weatherInfo: WeatherCityModel) {
+        val updatedList = adapter.list.toMutableList()
+        updatedList.add(weatherInfo)
+        adapter = WeatherCityAdapter(updatedList)
+        binding.cityRecyclerView.adapter = adapter
     }
 }
